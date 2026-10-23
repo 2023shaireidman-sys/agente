@@ -1,11 +1,50 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agente de Ayuda de IA</title>
-    <!-- Fuentes tipográficas de Google Fonts para estética cálida y legible -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agente de Ayuda de IA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Contenedor principal estilo tablero/escritorio de madera -->
+  <main class="contenedor-principal">
     
+    <!-- Encabezado -->
+    <header class="header-agente">
+      <h1>Agente de Ayuda de IA</h1>
+      <p>Tu asistente para tareas y estudios</p>
+    </header>
+
+    <!-- Zona de chat: Historial de la conversación -->
+    <section class="zona de chat" id="zonaDeChat">
+      <div class="mensaje agente">
+        <div class="burbuja">
+          ¡Hola! Soy tu agente de ayuda. ¿En qué tarea o tema de estudio te gustaría trabajar hoy?
+        </div>
+      </div>
+    </section>
+
+    <!-- Zona de escritura: Área para redactar y enviar -->
+    <section class="zona de escritura">
+      <form id="formularioChat" class="form-escritura">
+        <textarea 
+          id="mensajeInput" 
+          placeholder="Escribí tu consulta o tarea acá..." 
+          rows="2"
+          required
+        ></textarea>
+        <button type="submit" id="botonEnviar" class="btn-enviar">
+          <span>Enviar</span>
+        </button>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- Archivos JS requeridos -->
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
