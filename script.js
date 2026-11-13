@@ -1,236 +1,214 @@
-// Variables globales
-let arbolDecision = {};
-let historialRespuestas = [];
+// Variables de estado y sesión
+let sessionIdMemoria = null;
+let ultimoEnvio = 0;
+const LIMITE_CARACTERES = 500;
+const TIEMPO_ESPERA_MS = 30000;
+const PAUSA_ENTRE_ENVIOS_MS = 1500;
 
-// Elementos del DOM
-const zonaMensajes = document.getElementById('zona-de-mensajes') || document.getElementById('zonas-de-mensajes');
-const ingresoOpciones = document.getElementById('ingreso-de-mensajes') || document.getElementById('ingresos-de-opciones');
+// Elementos del DOM (adaptado a los IDs de index.html)
+const zonaDeChat = document.getElementById('zonaDeChat');
+const formularioChat = document.getElementById('formularioChat');
+const mensajeInput = document.getElementById('mensajeInput');
+const botonEnviar = document.getElementById('botonEnviar');
 
-// Cargar el proyecto al iniciar
-document.addEventListener('DOMContentLoaded', () => {
-    cargarArbolDecision();
+// Inicializar sesión al cargar
+const sessionId = obtenerOCrearSessionId();
+
+// Escuchar el envío del formulario
+formularioChat.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await procesarEnvio();
 });
 
-// Función para obtener el JSON de conversación local
-function cargarArbolDecision() {
-    fetch('arbol_decision.json')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('No se pudo acceder al archivo JSON');
-            }
-            return response.json();
-        })
-        .then(data => {
-            arbolDecision = data;
-            irANodo('inicio');
-        })
-        .catch(error => {
-            console.error('Error al cargar arbol_decision.json:', error);
-            mostrarErrorServidor('Abrí el proyecto con Live Server o un servidor local para que pueda leer arbol_decision.json.');
-        });
+// Permitir enviar con Enter (y salto de línea con Shift+Enter)
+mensajeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    formularioChat.requestSubmit();
+  }
+});
+
+// Genera o recupera un sessionId único
+function obtenerOCrearSessionId() {
+  const claveStorage = 'promptin_session_id';
+  
+  try {
+    const guardado = localStorage.getItem(claveStorage);
+    if (guardado) return guardado;
+  } catch (e) {
+    // Si localStorage está bloqueado, seguimos usando memoria
+  }
+
+  const nuevoId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `ses-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+
+  try {
+    localStorage.setItem(claveStorage, nuevoId);
+  } catch (e) {
+    sessionIdMemoria = nuevoId;
+  }
+
+  return nuevoId;
 }
 
-// Muestra mensajes de advertencia o errores en el chat
-function mostrarErrorServidor(mensaje) {
-    if (!zonaMensajes) return;
-    
-    const msjError = document.createElement('div');
-    msjError.className = 'mensaje bot';
-    msjError.style.backgroundColor = '#ef4444';
-    msjError.style.color = '#ffffff';
-    msjError.style.fontWeight = 'bold';
-    msjError.textContent = mensaje;
-    
-    zonaMensajes.appendChild(msjError);
-    zonaMensajes.scrollTop = zonaMensajes.scrollHeight;
+// Verifica si la URL del webhook es válida
+function urlWebhookEsValida() {
+  if (typeof WEBHOOK_URL === 'undefined' || !WEBHOOK_URL) return false;
+  const url = WEBHOOK_URL.trim();
+  if (url === '' || url.includes('ACA VA') || url.includes('ejemplo-webhook-prueba')) {
+    return false;
+  }
+  return true;
 }
 
-// Navegación principal del árbol de decisiones
-function irANodo(idNodo) {
-    const nodo = arbolDecision[idNodo];
-    if (!nodo) {
-        console.error('Nodo no encontrado:', idNodo);
-        return;
-    }
+// Agrega una burbuja de mensaje al chat usando textContent
+function agregarBurbuja(texto, tipo, esCargando = false) {
+  const contenedor = document.createElement('div');
+  contenedor.className = `mensaje ${tipo}`;
+  if (esCargando) {
+    contenedor.classList.add('cargando');
+  }
 
-    // Agregar el mensaje emitido por el bot
-    agregarMensajeBot(nodo.texto);
+  const burbuja = document.createElement('div');
+  burbuja.className = 'burbuja';
+  burbuja.textContent = texto;
 
-    // Limpiar el área de ingreso de opciones
-    if (ingresoOpciones) {
-        ingresoOpciones.innerHTML = '';
-    }
+  contenedor.appendChild(burbuja);
+  zonaDeChat.appendChild(contenedor);
+  zonaDeChat.scrollTop = zonaDeChat.scrollHeight;
 
-    // Renderizar inputs o botones según la configuración del nodo
-    if (nodo.requiereInput) {
-        renderizarFormularioInput(nodo);
-    } else if (nodo.opciones && nodo.opciones.length > 0) {
-        nodo.opciones.forEach(opcion => {
-            const boton = document.createElement('button');
-            boton.className = 'opcion-btn';
-            
-            if (opcion.siguiente === 'fin' || opcion.texto.toLowerCase().includes('terminar')) {
-                boton.classList.add('salir');
-            }
-
-            boton.textContent = opcion.texto;
-            boton.addEventListener('click', () => {
-                agregarMensajeUsuario(opcion.texto);
-                historialRespuestas.push({ nodo: idNodo, seleccion: opcion.texto });
-                
-                // Si el nodo incluye comunicación externa por Webhook/API
-                if (opcion.enviarAWebhook) {
-                    enviarMensajeAWebhook(opcion.texto, opcion.siguiente);
-                } else {
-                    irANodo(opcion.siguiente);
-                }
-            });
-            ingresoOpciones.appendChild(boton);
-        });
-    }
+  return contenedor;
 }
 
-// Agrega un mensaje del bot al chat con autoscroll
-function agregarMensajeBot(texto) {
-    if (!zonaMensajes) return;
-    const msj = document.createElement('div');
-    msj.className = 'mensaje bot';
-    msj.textContent = texto;
-    zonaMensajes.appendChild(msj);
-    zonaMensajes.scrollTop = zonaMensajes.scrollHeight;
+// Bloquea o desbloquea los controles de escritura
+function alternarControles(deshabilitar) {
+  mensajeInput.disabled = deshabilitar;
+  botonEnviar.disabled = deshabilitar;
+  if (!deshabilitar) {
+    mensajeInput.focus();
+  }
 }
 
-// Agrega la interacción del usuario al chat
-function agregarMensajeUsuario(texto) {
-    if (!zonaMensajes) return;
-    const msj = document.createElement('div');
-    msj.className = 'mensaje usuario';
-    msj.textContent = texto;
-    zonaMensajes.appendChild(msj);
-    zonaMensajes.scrollTop = zonaMensajes.scrollHeight;
-}
+// Limpia marcas Markdown y analiza la respuesta de Make de forma tolerante
+function procesarRespuestaMake(textoCrudo) {
+  let texto = textoCrudo.trim();
+  if (!texto) return '(respuesta vacía)';
 
-// Formulario para ingreso de datos (<input>) con validación
-function renderizarFormularioInput(nodo) {
-    if (!ingresoOpciones) return;
+  // Quitar envoltorios Markdown como ```json ... ```
+  texto = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
-    const contenedor = document.createElement('div');
-    contenedor.className = 'input-contenedor';
-    contenedor.style.display = 'flex';
-    contenedor.style.flexDirection = 'column';
-    contenedor.style.gap = '6px';
-
-    const form = document.createElement('form');
-    form.className = 'input-fila';
-    form.style.display = 'flex';
-    form.style.gap = '8px';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'input-datos';
-    input.placeholder = nodo.placeholder || 'Escribí tu consulta...';
-
-    const btnEnviar = document.createElement('button');
-    btnEnviar.type = 'submit';
-    btnEnviar.className = 'opcion-btn';
-    btnEnviar.textContent = 'Enviar';
-
-    const msjError = document.createElement('span');
-    msjError.className = 'msj-error';
-    msjError.style.color = '#ef4444';
-    msjError.style.fontSize = '0.8rem';
-    msjError.style.fontWeight = 'bold';
-
-    form.appendChild(input);
-    form.appendChild(btnEnviar);
-    contenedor.appendChild(form);
-    contenedor.appendChild(msjError);
-
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const valor = input.value.trim();
-
-        // Validaciones de formato
-        if (nodo.tipoValidacion === 'texto') {
-            if (!valor || /\d/.test(valor)) {
-                msjError.textContent = '⚠️ Ingresá un texto válido (sin números).';
-                return;
-            }
-        } else if (nodo.tipoValidacion === 'numero') {
-            if (isNaN(valor) || valor === '') {
-                msjError.textContent = '⚠️ Ingresá un valor numérico válido.';
-                return;
-            }
-        } else if (!valor) {
-            msjError.textContent = '⚠️ Por favor, ingresá una consulta.';
-            return;
+  // Intentar parseo estándar
+  let datos = null;
+  try {
+    datos = JSON.parse(texto);
+  } catch (e) {
+    // Si parece un objeto JSON roto por saltos de línea crudos
+    if (texto.startsWith('{') && texto.endsWith('}')) {
+      try {
+        const textoReparado = texto.replace(/\r?\n/g, '\\n');
+        datos = JSON.parse(textoReparado);
+      } catch (e2) {
+        // Extracción por expresión regular como último recurso
+        const campos = ['response', 'respuesta', 'message', 'mensaje'];
+        for (const campo of campos) {
+          const regex = new RegExp(`"${campo}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,|\\})`, 'i');
+          const coincidencia = texto.match(regex);
+          if (coincidencia && coincidencia[1].trim() !== '') {
+            return coincidencia[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          }
         }
+      }
+    }
+  }
 
-        agregarMensajeUsuario(valor);
-        historialRespuestas.push({ nodo: nodo.id, valorInput: valor });
+  // Si es un objeto válido, buscar los campos en orden
+  if (datos !== null && typeof datos === 'object' && !Array.isArray(datos)) {
+    const claves = ['response', 'respuesta', 'message', 'mensaje'];
+    for (const clave of claves) {
+      if (typeof datos[clave] === 'string' && datos[clave].trim() !== '') {
+        return datos[clave];
+      }
+    }
+    return 'Make respondió, pero sin el campo response';
+  }
 
-        // Si el nodo requiere enviar datos a un Webhook/API externo
-        if (nodo.urlWebhook) {
-            enviarMensajeAWebhook(valor, nodo.siguiente, nodo.urlWebhook);
-        } else {
-            irANodo(nodo.siguiente);
-        }
+  // Si no es un objeto (texto plano, número, booleano, lista, etc.)
+  return texto;
+}
+
+// Flujo principal de validación y envío a Make
+async function procesarEnvio() {
+  const mensaje = mensajeInput.value.trim();
+
+  // Validaciones previas
+  if (!mensaje) return;
+
+  if (mensaje.length > LIMITE_CARACTERES) {
+    agregarBurbuja(`El mensaje no puede superar los ${LIMITE_CARACTERES} caracteres.`, 'agente');
+    return;
+  }
+
+  if (!urlWebhookEsValida()) {
+    agregarBurbuja('Falta pegar la URL de tu webhook en config.js', 'agente');
+    return;
+  }
+
+  // Pausa mínima de 1,5 segundos entre envíos
+  const ahora = Date.now();
+  if (ahora - ultimoEnvio < PAUSA_ENTRE_ENVIOS_MS) {
+    return;
+  }
+  ultimoEnvio = ahora;
+
+  // Mostrar mensaje del usuario y limpiar campo
+  agregarBurbuja(mensaje, 'usuario');
+  mensajeInput.value = '';
+
+  // Estado cargando
+  alternarControles(true);
+  const burbujaCarga = agregarBurbuja('Pensando...', 'agente', true);
+
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), TIEMPO_ESPERA_MS);
+
+  try {
+    const respuesta = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        sessionId: sessionId,
+        mensaje: mensaje,
+        fecha: new Date().toISOString()
+      }),
+      signal: controlador.signal
     });
 
-    ingresoOpciones.appendChild(contenedor);
-}
+    const textoRespuesta = await respuesta.text();
 
-// Envío a Webhook solucionando el error 'Unexpected token A, "Accepted" is not valid JSON'
-async function enviarMensajeAWebhook(mensajeTexto, siguienteNodo, urlApi) {
-    const indicadorCarga = document.createElement('div');
-    indicadorCarga.className = 'mensaje bot';
-    indicadorCarga.textContent = 'El agente está pensando...';
-    zonaMensajes.appendChild(indicadorCarga);
-    zonaMensajes.scrollTop = zonaMensajes.scrollHeight;
-
-    try {
-        const response = await fetch(urlApi, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ mensaje: mensajeTexto })
-        });
-
-        // Removemos el mensaje de estado "pensando"
-        indicadorCarga.remove();
-
-        // Leemos la respuesta como texto primero para evitar el error al parsear "Accepted" directamente
-        const textoRespuesta = await response.text();
-
-        try {
-            // Intentamos parsear como objeto JSON
-            const data = JSON.parse(textoRespuesta);
-            const respuestaBot = data.respuesta || data.texto || data.message || JSON.stringify(data);
-            agregarMensajeBot(respuestaBot);
-        } catch (errorJson) {
-            // Si la respuesta fue "Accepted" en texto plano u otro formato no-JSON
-            if (textoRespuesta.trim() === "Accepted") {
-                agregarMensajeBot("¡Mensaje recibido! En Make (Integromat), asegurate de cambiar la respuesta del Webhook a Status 200 y devolver un objeto JSON válido.");
-            } else if (textoRespuesta.trim() !== "") {
-                agregarMensajeBot(textoRespuesta);
-            } else {
-                agregarMensajeBot("Respuesta recibida correctamente.");
-            }
-        }
-
-        // Continuar al siguiente nodo si existe
-        if (siguienteNodo && arbolDecision[siguienteNodo]) {
-            irANodo(siguienteNodo);
-        }
-
-    } catch (error) {
-        indicadorCarga.remove();
-        console.error('Error al conectar con la API/Webhook:', error);
-        mostrarErrorServidor('No se pudo conectar con el servidor o webhook.');
-        
-        if (siguienteNodo && arbolDecision[siguienteNodo]) {
-            irANodo(siguienteNodo);
-        }
+    if (!respuesta.ok) {
+      throw new Error(`HTTP_${respuesta.status}`);
     }
+
+    const textoFinal = procesarRespuestaMake(textoRespuesta);
+    agregarBurbuja(textoFinal, 'agente');
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      agregarBurbuja('Tiempo agotado: Make tardó más de 30 segundos en responder.', 'agente');
+    } else if (error.message && error.message.startsWith('HTTP_')) {
+      const codigo = error.message.split('_')[1];
+      agregarBurbuja(`Make respondió con error (código ${codigo}). Revisá que tu escenario esté en Active o que hayas apretado Run once.`, 'agente');
+    } else {
+      agregarBurbuja('Error de red: no se pudo conectar con Make. Revisá tu conexión a internet.', 'agente');
+    }
+  } finally {
+    clearTimeout(temporizador);
+    if (burbujaCarga && burbujaCarga.parentNode) {
+      burbujaCarga.remove();
+    }
+    alternarControles(false);
+  }
 }
