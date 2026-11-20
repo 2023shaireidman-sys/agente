@@ -5,14 +5,22 @@ const LIMITE_CARACTERES = 500;
 const TIEMPO_ESPERA_MS = 30000;
 const PAUSA_ENTRE_ENVIOS_MS = 1500;
 
-// Elementos del DOM (adaptado a los IDs de index.html)
+// Elementos del DOM
 const zonaDeChat = document.getElementById('zonaDeChat');
 const formularioChat = document.getElementById('formularioChat');
 const mensajeInput = document.getElementById('mensajeInput');
 const botonEnviar = document.getElementById('botonEnviar');
+const contadorCaracteres = document.getElementById('contadorCaracteres');
 
 // Inicializar sesión al cargar
 const sessionId = obtenerOCrearSessionId();
+
+// Actualizar contador de caracteres en tiempo real
+mensajeInput.addEventListener('input', () => {
+  const longitudActual = mensajeInput.value.length;
+  contadorCaracteres.textContent = `${longitudActual} / ${LIMITE_CARACTERES}`;
+  contadorCaracteres.style.color = longitudActual >= LIMITE_CARACTERES ? '#dc2626' : '#64748b';
+});
 
 // Escuchar el envío del formulario
 formularioChat.addEventListener('submit', async (e) => {
@@ -62,6 +70,13 @@ function urlWebhookEsValida() {
   return true;
 }
 
+// Desplaza el chat suavemente hasta el último mensaje
+function bajarAlFinalDelChat() {
+  requestAnimationFrame(() => {
+    zonaDeChat.scrollTop = zonaDeChat.scrollHeight;
+  });
+}
+
 // Agrega una burbuja de mensaje al chat usando textContent
 function agregarBurbuja(texto, tipo, esCargando = false) {
   const contenedor = document.createElement('div');
@@ -76,7 +91,7 @@ function agregarBurbuja(texto, tipo, esCargando = false) {
 
   contenedor.appendChild(burbuja);
   zonaDeChat.appendChild(contenedor);
-  zonaDeChat.scrollTop = zonaDeChat.scrollHeight;
+  bajarAlFinalDelChat();
 
   return contenedor;
 }
@@ -164,6 +179,8 @@ async function procesarEnvio() {
   // Mostrar mensaje del usuario y limpiar campo
   agregarBurbuja(mensaje, 'usuario');
   mensajeInput.value = '';
+  contadorCaracteres.textContent = `0 / ${LIMITE_CARACTERES}`;
+  contadorCaracteres.style.color = '#64748b';
 
   // Estado cargando
   alternarControles(true);
