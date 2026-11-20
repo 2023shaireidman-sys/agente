@@ -4,21 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agente de Ayuda de IA</title>
+  <!-- Tipografía moderna Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Contenedor principal estilo tablero/escritorio de madera -->
   <main class="contenedor-principal">
     
-    <!-- Encabezado -->
+    <!-- Encabezado profesional -->
     <header class="header-agente">
-      <h1>Agente de Ayuda de IA</h1>
-      <p>Tu asistente para tareas y estudios</p>
+      <div class="header-info">
+        <div class="avatar-bot" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 8V4H8"/>
+            <rect width="16" height="12" x="4" y="8" rx="2"/>
+            <path d="M2 14h2"/>
+            <path d="M20 14h2"/>
+            <path d="M15 13v2"/>
+            <path d="M9 13v2"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Agente de Ayuda de IA</h1>
+          <p class="subtitulo">
+            <span class="indicador-online"></span> Tu asistente para tareas y estudios
+          </p>
+        </div>
+      </div>
     </header>
 
-    <!-- Zona de chat: Historial de la conversación -->
-    <section class="zona de chat" id="zonaDeChat">
+    <!-- Zona de chat con scroll garantizado -->
+    <section class="zona-chat" id="zonaDeChat">
       <div class="mensaje agente">
         <div class="burbuja">
           ¡Hola! Soy tu agente de ayuda. ¿En qué tarea o tema de estudio te gustaría trabajar hoy?
@@ -26,18 +45,25 @@
       </div>
     </section>
 
-    <!-- Zona de escritura: Área para redactar y enviar -->
-    <section class="zona de escritura">
+    <!-- Zona de escritura -->
+    <section class="zona-escritura">
       <form id="formularioChat" class="form-escritura">
-        <textarea 
-          id="mensajeInput" 
-          placeholder="Escribí tu consulta o tarea acá..." 
-          rows="2"
-          maxlength="500"
-          required
-        ></textarea>
-        <button type="submit" id="botonEnviar" class="btn-enviar">
+        <div class="input-wrapper">
+          <textarea 
+            id="mensajeInput" 
+            placeholder="Escribí tu consulta o tarea acá... (Shift + Enter para salto de línea)" 
+            rows="2"
+            maxlength="500"
+            required
+          ></textarea>
+          <span id="contadorCaracteres" class="contador">0 / 500</span>
+        </div>
+        <button type="submit" id="botonEnviar" class="btn-enviar" title="Enviar mensaje">
           <span>Enviar</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
         </button>
       </form>
     </section>
